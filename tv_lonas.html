@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TV — DEMANDA DE LONAS</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<style>
+:root{
+  --laranja:#F58220; --azul:#1B3A6B; --azul-claro:#2a5298;
+  --verde:#2ecc71; --amarelo:#f1c40f; --vermelho:#e74c3c; --roxo:#a06bff;
+}
+*{box-sizing:border-box; margin:0; padding:0; font-family:'Segoe UI',Arial,sans-serif;}
+body{background:#0d1522; color:#eef2f8; min-height:100vh; padding:18px 22px;}
+
+header{display:flex; justify-content:space-between; align-items:center; margin-bottom:18px;}
+header h1{font-size:30px; letter-spacing:1px;}
+header h1 span{color:var(--laranja);}
+.relogio{text-align:right;}
+.relogio .hora{font-size:34px; font-weight:800;}
+.relogio .data{font-size:15px; color:#8ea0bd; font-weight:700;}
+
+.colunas{display:grid; grid-template-columns:repeat(3,1fr); gap:16px;}
+@media(max-width:1100px){ .colunas{grid-template-columns:1fr;} }
+
+.frente{background:#141f33; border-radius:16px; padding:14px; border-top:5px solid var(--azul-claro);}
+.frente.REPARO{border-top-color:var(--laranja);}
+.frente.CONFECCAO{border-top-color:var(--roxo);}
+.ftit{display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;}
+.ftit .nome{font-size:20px; font-weight:800; letter-spacing:.6px;}
+.ftit .meta{font-size:13px; font-weight:800; color:#8ea0bd;}
+.ftit .meta b{color:#fff; font-size:17px;}
+
+.prog{margin:-4px 0 12px;}
+.prog .pb{height:14px; background:#0d1522; border-radius:8px; overflow:hidden;}
+.prog .pb i{display:block; height:100%; border-radius:8px; background:var(--laranja); transition:width .5s;}
+.prog .pb i.ok{background:var(--verde);}
+.prog .pt{display:flex; justify-content:space-between; font-size:14px; font-weight:800; margin-top:4px; color:#8ea0bd;}
+.prog .pt b{color:#fff;}
+.equipe-baixa{color:var(--vermelho); font-size:12px; font-weight:800;}
+.item{background:#1b2942; border-radius:12px; padding:11px 13px; margin-bottom:9px;}
+.item .nome{font-size:17px; font-weight:800;}
+.item .sub{font-size:13px; color:#8ea0bd; font-weight:700; margin-top:2px;}
+.item .linha{display:flex; flex-wrap:wrap; gap:5px 14px; margin-top:7px; font-size:14px; font-weight:700;}
+.item .linha b{color:#fff;}
+.faz{color:var(--verde)!important; font-size:16px;}
+.tags{margin-top:7px; display:flex; gap:6px; flex-wrap:wrap;}
+.tag{font-size:11px; font-weight:800; padding:3px 9px; border-radius:6px; letter-spacing:.4px;}
+.tag.ok{background:rgba(46,204,113,.18); color:var(--verde);}
+.tag.cima{background:rgba(241,196,15,.18); color:var(--amarelo);}
+.tag.atraso{background:rgba(231,76,60,.22); color:var(--vermelho);}
+.tag.urg{background:var(--vermelho); color:#fff;}
+.tag.parada{background:rgba(241,196,15,.18); color:var(--amarelo);}
+.vazio{color:#5b6c88; font-size:15px; font-weight:700; text-align:center; padding:26px 0;}
+
+.rodape{margin-top:16px; display:flex; gap:14px; flex-wrap:wrap; font-size:15px; font-weight:800; color:#8ea0bd;}
+.rodape b{color:#fff;}
+#alertaUrg{display:none; position:fixed; inset:0; z-index:100; background:rgba(231,76,60,.95); color:#fff; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:40px; animation:pisca 0.8s infinite; cursor:pointer;}
+#alertaUrg.on{display:flex;}
+#alertaUrg .t1{font-size:64px; font-weight:900; letter-spacing:2px;}
+#alertaUrg .t2{font-size:34px; font-weight:800; margin-top:18px; line-height:1.3;}
+#alertaUrg .t3{font-size:16px; font-weight:700; margin-top:26px; opacity:.85;}
+@keyframes pisca{50%{background:rgba(160,30,20,.95);}}
+#btnSom{position:fixed; top:14px; left:50%; transform:translateX(-50%); z-index:90; background:var(--laranja); color:#fff; border:none; border-radius:10px; padding:12px 20px; font-size:16px; font-weight:800; cursor:pointer;}
+#status{margin-left:auto; font-size:12px;}
+#status.ok{color:var(--verde);}
+#status.off{color:var(--vermelho);}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>DEMANDA DE <span>LONAS</span> — FILA DO DIA</h1>
+  <div class="relogio"><div class="hora" id="hora">--:--</div><div class="data" id="data"></div></div>
+</header>
+
+<button id="btnSom" onclick="ativarSom()">🔊 TOQUE AQUI PRA ATIVAR O SOM DE URGENTE</button>
+<div id="alertaUrg" onclick="fecharAlerta()">
+  <div class="t1">🚨 DEMANDA URGENTE</div>
+  <div class="t2" id="alertaTxt"></div>
+  <div class="t3">SOME SOZINHO EM 1 MINUTO · TOQUE PRA FECHAR</div>
+</div>
+
+<div class="colunas" id="colunas"></div>
+
+<div class="rodape">
+  <span>NA FILA: <b id="tFila">0</b></span>
+  <span>EM ANDAMENTO: <b id="tAnd">0</b></span>
+  <span>AGUARDANDO CHECKLIST: <b id="tChk" style="color:var(--roxo)">0</b></span>
+  <span>PRONTAS AGUARDANDO ENTREGA: <b id="tPronta">0</b></span>
+  <span>VÃO ATRASAR: <b id="tAtraso" style="color:var(--vermelho)">0</b></span>
+  <span id="status">CONECTANDO...</span>
+</div>
+
+<script>
+const SUPABASE_URL = 'https://vybxkraqydsjrdvyxknp.supabase.co';
+const SUPABASE_KEY = 'COLE_AQUI_A_CHAVE_ANON';
+let sb=null;
+if(SUPABASE_KEY && !SUPABASE_KEY.includes('COLE_AQUI') && window.supabase) sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+
+let demandas=[], producao=[], equipe=[], escala=[];
+let config={ cap_lav_sem:20, cap_lav_sab:10, cap_rep_sem:5, cap_rep_sab:2, cap_conf_sem:40, cap_conf_sab:0, dias_parada:5 };
+function r1(x){ return Math.round(x*10)/10; }
+
+/* datas */
+function hojeStr(){ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function addDia(str){ const [a,m,d]=str.split('-').map(Number); const dt=new Date(a,m-1,d+1); return dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0'); }
+function diaSemana(str){ const [a,m,d]=str.split('-').map(Number); return new Date(a,m-1,d).getDay(); }
+function fmt(str){ if(!str) return '—'; const [a,m,d]=str.split('-'); return d+'/'+m; }
+
+/* previsão (mesma lógica do app) */
+function statusEsc(pid,data){ const r=escala.find(e=>e.id===data+'|'+pid); return r?r.status:'T'; }
+function fatorEquipe(tipo,data){
+  const membros=equipe.filter(p=>p.ativo!==false&&p.frente===tipo);
+  if(!membros.length) return 1;
+  return membros.filter(p=>statusEsc(p.id,data)==='T').length/membros.length;
+}
+function capBase(tipo,data){
+  const ds=diaSemana(data);
+  if(ds===0) return 0;
+  const sab=ds===6;
+  if(tipo==='LAVAGEM') return Number(sab?config.cap_lav_sab:config.cap_lav_sem)||0;
+  if(tipo==='REPARO') return Number(sab?config.cap_rep_sab:config.cap_rep_sem)||0;
+  return Number(sab?config.cap_conf_sab:config.cap_conf_sem)||0;
+}
+function capDia(tipo,data){
+  const c=capBase(tipo,data)*fatorEquipe(tipo,data);
+  return tipo==='CONFECCAO'?r1(c):Math.floor(c);
+}
+function producaoHoje(tipo){
+  const h=hojeStr();
+  return r1(producao.filter(l=>l.data===h&&l.tipo===tipo).reduce((s,l)=>s+(tipo==='CONFECCAO'?(Number(l.m2)||0):(Number(l.qtd)||0)),0));
+}
+function ordenar(arr){
+  return arr.sort((a,b)=>{
+    if(a.prioridade!==b.prioridade) return a.prioridade==='URGENTE'?-1:1;
+    const da=a.data_necessaria||'9999', db=b.data_necessaria||'9999';
+    if(da!==db) return da<db?-1:1;
+    return (a.criado_em||'')<(b.criado_em||'')?-1:1;
+  });
+}
+function calcularPrevisoes(){
+  const previsoes={};
+  ['LAVAGEM','REPARO','CONFECCAO'].forEach(tipo=>{
+    const fila=ordenar(demandas.filter(d=>d.tipo===tipo&&(d.status==='FILA'||d.status==='ANDAMENTO')));
+    if(!fila.length) return;
+    let dia=hojeStr(), resto=Math.max(0,capDia(tipo,dia)-producaoHoje(tipo)), g0=0;
+    while(resto<=0&&g0<60){ dia=addDia(dia); resto=capDia(tipo,dia); g0++; }
+    if(resto<=0) return;
+    fila.forEach(d=>{
+      const porPeca=tipo==='CONFECCAO'?Number(d.m2_peca)||0:1;
+      if(tipo==='CONFECCAO'&&!porPeca) return;
+      let falta=Math.max(0,(d.qtd||0)-(d.qtd_pronta||0))*porPeca, seg=0;
+      while(falta>0&&seg<3000){
+        const usa=Math.min(falta,resto);
+        falta=r1(falta-usa); resto=r1(resto-usa);
+        if(falta>0&&resto<=0){ do{ dia=addDia(dia); resto=capDia(tipo,dia); seg++; }while(resto<=0&&seg<3000); }
+        seg++;
+      }
+      previsoes[d.id]=dia;
+      if(resto<=0){ let g=0; do{ dia=addDia(dia); resto=capDia(tipo,dia); g++; }while(resto<=0&&g<60); }
+    });
+  });
+  return previsoes;
+}
+function diasParada(d){
+  let ult=(d.criado_em||'').slice(0,10);
+  producao.forEach(l=>{ if(l.demanda_id===d.id&&l.data&&l.data>ult) ult=l.data; });
+  if(!ult) return 0;
+  const [a,m,dd]=ult.split('-').map(Number);
+  const [a2,m2,d3]=hojeStr().split('-').map(Number);
+  return Math.round((new Date(a2,m2-1,d3)-new Date(a,m-1,dd))/86400000);
+}
+
+/* render */
+function render(){
+  const prev=calcularPrevisoes();
+  const hoje=hojeStr();
+  let atrasoTot=0;
+  const html=['LAVAGEM','REPARO','CONFECCAO'].map(tipo=>{
+    const fila=ordenar(demandas.filter(d=>d.tipo===tipo&&(d.status==='FILA'||d.status==='ANDAMENTO')));
+    const unid=tipo==='CONFECCAO'?'M²':'PÇ';
+    const meta=capDia(tipo,hoje);
+    const feitoHoje=producaoHoje(tipo);
+    let capHoje=Math.max(0,meta-feitoHoje);
+    const pct=meta?Math.min(100,Math.round(feitoHoje/meta*100)):(feitoHoje?100:0);
+    const fat=fatorEquipe(tipo,hoje);
+    const itens=fila.map(d=>{
+      const porPeca=tipo==='CONFECCAO'?Number(d.m2_peca)||0:1;
+      const semM2=tipo==='CONFECCAO'&&!porPeca;
+      const falta=Math.max(0,(d.qtd||0)-(d.qtd_pronta||0))*(semM2?1:porPeca);
+      const faz=semM2?0:Math.min(falta,capHoje);
+      capHoje=r1(capHoje-faz);
+      const p=d.previsao_manual||prev[d.id]||null;
+      let tag='';
+      if(d.data_necessaria&&p){
+        if(p>d.data_necessaria){ tag='<span class="tag atraso">VAI ATRASAR</span>'; atrasoTot++; }
+        else if(p===d.data_necessaria) tag='<span class="tag cima">EM CIMA DO PRAZO</span>';
+        else tag='<span class="tag ok">NO PRAZO</span>';
+      }
+      const par=diasParada(d);
+      return `<div class="item">
+        <div class="nome">${d.familia||''} — ${d.peca||''} ${d.medida||''}</div>
+        <div class="sub">${d.evento||'SEM EVENTO'}${d.responsavel?' · '+d.responsavel:''}</div>
+        <div class="linha">
+          <span>FALTA: <b>${Math.round(falta*10)/10} ${semM2?'PÇ (SEM M²)':unid}</b></span>
+          <span class="faz">HOJE: <b>${Math.round(faz*10)/10} ${unid}</b></span>
+          <span>PRAZO: <b>${fmt(d.data_necessaria)}</b></span>
+          <span>PREVISÃO: <b>${fmt(p)}</b></span>
+        </div>
+        <div class="tags">
+          ${d.prioridade==='URGENTE'?'<span class="tag urg">URGENTE</span>':''}
+          ${par>=Number(config.dias_parada||5)?`<span class="tag parada">⏸ PARADA HÁ ${par} DIAS</span>`:''}
+          ${tag}
+        </div>
+      </div>`;
+    }).join('');
+    return `<div class="frente ${tipo}">
+      <div class="ftit"><span class="nome">${tipo==='CONFECCAO'?'CONFECÇÃO':tipo}</span><span class="meta">META HOJE: <b>${meta} ${unid}</b></span></div>
+      <div class="prog">
+        <div class="pb"><i class="${pct>=100?'ok':''}" style="width:${pct}%"></i></div>
+        <div class="pt"><span>FEITO HOJE: <b>${feitoHoje} ${unid}</b> (${pct}%)</span>${capBase(tipo,hoje)&&fat<1?`<span class="equipe-baixa">EQUIPE ${Math.round(fat*100)}%</span>`:''}</div>
+      </div>
+      ${itens||'<div class="vazio">FILA VAZIA 👍</div>'}
+    </div>`;
+  }).join('');
+  document.getElementById('colunas').innerHTML=html;
+  document.getElementById('tFila').textContent=demandas.filter(d=>d.status==='FILA').length;
+  document.getElementById('tAnd').textContent=demandas.filter(d=>d.status==='ANDAMENTO').length;
+  document.getElementById('tPronta').textContent=demandas.filter(d=>d.status==='PRONTA').length;
+  document.getElementById('tChk').textContent=demandas.filter(d=>d.status==='QUALIDADE').length;
+  document.getElementById('tAtraso').textContent=atrasoTot;
+}
+
+/* dados */
+async function atualizar(){
+  const st=document.getElementById('status');
+  if(!sb){ st.className='off'; st.textContent='SEM CHAVE DO SUPABASE'; return; }
+  try{
+    const {data:dd,error}=await sb.from('lonas_demandas').select('*');
+    if(error) throw error;
+    demandas=dd||[];
+    const {data:cc}=await sb.from('lonas_config').select('*');
+    if(cc) cc.forEach(r=>{ if(r.chave in config) config[r.chave]=Number(r.valor); });
+    const {data:pp}=await sb.from('lonas_producao').select('*');
+    if(pp) producao=pp;
+    const {data:eq}=await sb.from('lonas_equipe').select('*');
+    if(eq) equipe=eq;
+    const {data:es}=await sb.from('lonas_escala').select('*');
+    if(es) escala=es;
+    checarUrgentes();
+    render();
+    st.className='ok'; st.textContent='ATUALIZADO '+new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+  }catch(e){ st.className='off'; st.textContent='SEM CONEXÃO — TENTANDO DE NOVO'; }
+}
+
+/* aviso de urgente: pisca a tela + som */
+let urgVistos=null, audioCtx=null, fecharTimer=null, bipTimer=null;
+function ativarSom(){
+  try{ audioCtx=audioCtx||new (window.AudioContext||window.webkitAudioContext)(); audioCtx.resume&&audioCtx.resume(); }catch(e){}
+  document.getElementById('btnSom').style.display='none';
+  bip(1);
+}
+function bip(vezes){
+  if(!audioCtx) return;
+  for(let i=0;i<(vezes||3);i++){
+    const o=audioCtx.createOscillator(), g=audioCtx.createGain();
+    o.type='square'; o.frequency.value=i%2?660:880;
+    o.connect(g); g.connect(audioCtx.destination);
+    const t=audioCtx.currentTime+i*0.35;
+    g.gain.setValueAtTime(0.35,t); g.gain.exponentialRampToValueAtTime(0.001,t+0.3);
+    o.start(t); o.stop(t+0.3);
+  }
+}
+function checarUrgentes(){
+  const atuais=demandas.filter(d=>d.prioridade==='URGENTE'&&(d.status==='FILA'||d.status==='ANDAMENTO'));
+  if(urgVistos===null){ urgVistos=new Set(atuais.map(d=>d.id)); return; } // primeira carga não alerta
+  const novos=atuais.filter(d=>!urgVistos.has(d.id));
+  atuais.forEach(d=>urgVistos.add(d.id));
+  if(novos.length) mostrarAlerta(novos);
+}
+function mostrarAlerta(novos){
+  document.getElementById('alertaTxt').innerHTML=novos.map(d=>
+    `${d.tipo==='CONFECCAO'?'CONFECÇÃO':d.tipo} · ${d.familia||''} ${d.peca||''} ${d.medida||''} · ${d.qtd} PÇ${d.evento?'<br>'+d.evento:''}${d.data_necessaria?' · ATÉ '+fmt(d.data_necessaria):''}`).join('<hr style="opacity:.3;margin:14px 0">');
+  document.getElementById('alertaUrg').classList.add('on');
+  bip(4);
+  clearInterval(bipTimer); bipTimer=setInterval(()=>bip(2),10000);
+  clearTimeout(fecharTimer); fecharTimer=setTimeout(fecharAlerta,60000);
+}
+function fecharAlerta(){
+  document.getElementById('alertaUrg').classList.remove('on');
+  clearInterval(bipTimer); clearTimeout(fecharTimer);
+}
+/* tempo real: urgente aparece na hora, sem esperar o minuto */
+if(sb){
+  sb.channel('tv-lonas')
+    .on('postgres_changes',{event:'*',schema:'public',table:'lonas_demandas'},()=>atualizar())
+    .on('postgres_changes',{event:'*',schema:'public',table:'lonas_producao'},()=>atualizar())
+    .subscribe();
+}
+
+/* relógio */
+function relogio(){
+  const ag=new Date();
+  document.getElementById('hora').textContent=ag.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+  document.getElementById('data').textContent=ag.toLocaleDateString('pt-BR',{weekday:'long',day:'2-digit',month:'2-digit'}).toUpperCase();
+}
+relogio(); setInterval(relogio,1000);
+atualizar(); setInterval(atualizar,60000);
+</script>
+</body>
+</html>
