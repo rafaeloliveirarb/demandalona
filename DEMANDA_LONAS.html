@@ -194,7 +194,7 @@ select.chip{appearance:none; -webkit-appearance:none;}
     <button class="hbtn" onclick="abrirMateriais()" title="MATERIAL DE CONFECÇÃO">📦</button>
     <button class="hbtn" onclick="imprimirFila()" title="FILA DO DIA">🖨️</button>
     <button class="hbtn" onclick="abrirRelatorio()" title="RELATÓRIO DO MÊS">📊</button>
-    <button class="hbtn" onclick="window.open('tv_lonas.html','_blank')" title="MODO TV">📺</button>
+    <button class="hbtn" onclick="abrirTV()" title="MODO TV">📺</button>
     <div id="syncBadge" class="local">SÓ NESTE APARELHO</div>
   </div>
 </header>
@@ -1133,6 +1133,19 @@ function verFoto(id, qual){
   if(!src) return;
   document.getElementById('fotoGrande').src=src;
   document.getElementById('mFoto').classList.add('aberto');
+}
+
+/* ================== MODO TV ================== */
+async function abrirTV(){
+  const aba=window.open('about:blank','_blank');
+  try{
+    const r=await fetch('tv_lonas.html',{method:'HEAD',cache:'no-store'});
+    if(!r.ok) throw new Error(r.status);
+    if(aba) aba.location.href='tv_lonas.html'; else window.location.href='tv_lonas.html';
+  }catch(e){
+    if(aba) aba.close();
+    alert('O ARQUIVO tv_lonas.html NÃO ESTÁ NO SITE.\n\nSOBE ELE NO GITHUB NA MESMA PASTA DESTE APP, COM O NOME EXATAMENTE:\ntv_lonas.html\n\n(TUDO MINÚSCULO, COM UNDERLINE)');
+  }
 }
 
 /* ================== AVISO DE URGENTE ================== */
